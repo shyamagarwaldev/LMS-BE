@@ -3,6 +3,7 @@ import {
   createCourse,
   deleteCourseThumbnail,
   getAllCourses,
+  getAllPurchsedCourses,
   getCourse,
   togglePublish,
   updateCourse,
@@ -14,6 +15,7 @@ export const courseRouter = Router();
 
 courseRouter.use(Auth);
 courseRouter.route("/allCourses").get(getAllCourses);
+courseRouter.route("/purchasedCourses").get(getAllPurchsedCourses);
 courseRouter.route("/createCourse").post(createCourse);
 
 courseRouter.route("/getCourse/:courseId").get(getCourse);
