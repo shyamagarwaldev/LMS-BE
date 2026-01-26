@@ -16,7 +16,7 @@ const secretAccessKey = process.env.SECRET_KEY;
 if (!region || !Bucket || !accessKeyId || !secretAccessKey) {
   throw new Error("Missing required AWS S3 environment variables");
 }
-
+// this this the client on On whose behalf we are generating the pre-signed URLs. Since this user has access to my S3 bucket. this is a IAM user with name lms
 const s3Client = new S3Client({
   region,
   credentials: {
@@ -59,6 +59,7 @@ export async function generateUploadURL(fileType, folder, id) {
       });
     }
 
+    // path where it is going to be uploaded
     const Key = `${folder}/${id}_${randomUUID()}.${fileType}`;
 
     const command = new PutObjectCommand({
@@ -68,7 +69,7 @@ export async function generateUploadURL(fileType, folder, id) {
     });
 
     const uploadURL = await getSignedUrl(s3Client, command, {
-      expiresIn: 300, // 5 minutes
+      expiresIn: 600, // 10 minutes
     });
     return { uploadURL, Key };
   } catch (error) {

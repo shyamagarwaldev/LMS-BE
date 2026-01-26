@@ -1,14 +1,6 @@
 import mongoose, { Schema } from "mongoose";
 
 const videoSchema = new Schema({
-  // videoUrl: {
-  //   type: String,
-  //   required: [true, "Video URL is Required"],
-  // },
-  // public_id: {
-  //   type: String,
-  //   required: [true, "Video public_id is Required"],
-  // },
   s3Key: {
     type: String, // For S3 uploads
   },
@@ -36,6 +28,9 @@ const videoSchema = new Schema({
       ref: "Comment",
     },
   ],
+  duration: {
+    type: Number,
+  },
 
   notes: [{}],
 });
