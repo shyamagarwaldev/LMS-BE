@@ -106,15 +106,6 @@ export const createCourse = asyncHandler(async (req, res) => {
         path: validatedInputs.error?.issues?.[0]?.path?.[0],
         statusCode: 400,
       });
-    let instructor;
-    try {
-      instructor = await User.findById(_id);
-    } catch (error) {
-      throw new ApiError({
-        message: "Something Went Wrong While getting The Instructor Details",
-        statusCode: 500,
-      });
-    }
     const course = await Course.create({
       title,
       subtitle,
@@ -126,7 +117,7 @@ export const createCourse = asyncHandler(async (req, res) => {
       primaryLanguage,
       objectives,
       welcomeMessage,
-      instructor: instructor?.username,
+      instructor_id: _id,
     });
     if (!course)
       throw new ApiError({
@@ -242,7 +233,7 @@ export const deleteCourseThumbnail = asyncHandler(async (req, res) => {
   }
 });
 
-export const getCourse = asyncHandler(async (req, res) => {
+export const getAdminCourse = asyncHandler(async (req, res) => {
   try {
     const { courseId } = req.params;
 
@@ -251,6 +242,7 @@ export const getCourse = asyncHandler(async (req, res) => {
     if (!courseId) {
       throw new ApiError({ message: "Course Id is Required", statusCode: 400 });
     }
+
     const [course] = await Course.aggregate([
       {
         $match: { _id: new mongoose.Types.ObjectId(courseId) },
@@ -264,91 +256,52 @@ export const getCourse = asyncHandler(async (req, res) => {
         },
       },
       {
-        $lookup: {
-          from: "purchases",
-          localField: "_id",
-          foreignField: "course_id",
-          as: "purchases",
-        },
-      },
-      {
-        $addFields: {
-          purchaseForUser: {
-            $filter: {
-              input: "$purchases",
-              as: "p",
-              cond: {
-                $eq: ["$$p.student_id", new mongoose.Types.ObjectId(_id)],
-              },
-            },
-          },
-        },
-      },
-      {
-        $addFields: {
-          isPurchased: { $gt: [{ $size: "$purchaseForUser" }, 0] },
-          completed_video_ids: {
-            $ifNull: [{ $first: "$purchaseForUser.videos_completed_ids" }, []],
-          },
-          last_watched_video_id: {
-            $first: "$purchaseForUser.last_watched_video_id",
-          },
-        },
-      },
-      {
-        $addFields: {
-          students: { $size: "$purchases" },
-          totalLessons: { $size: "$videos" },
-          completedLessons: {
-            $size: { $ifNull: ["$completed_video_ids", []] },
-          },
-          totalDurationMinutes: { $sum: "$videos.duration" },
-        },
-      },
-      {
         $project: {
-          _id: 0,
-          id: "$_id",
+          _id: 1,
           title: 1,
-          instructor: 1,
+          category: 1,
           description: 1,
-          image: "$thumbnail",
           level: 1,
-          price: "$pricing",
-          students: 1,
-          totalLessons: 1,
-          completedLessons: 1,
-          completed_video_ids: 1,
-          last_watched_video_id: 1,
-          isPurchased: 1,
-          // Simple duration in minutes (e.g., "123m") to keep it simple
-          duration: {
-            $concat: [
-              { $toString: { $ifNull: ["$totalDurationMinutes", 0] } },
-              "m",
-            ],
-          },
+          pricing: 1,
+          objectives: 1,
+          primaryLanguage: 1,
+          subtitle: 1,
+          welcomeMessage: 1,
+          thumbnail: 1,
+          thumbnail_s3_key: 1,
+          isPublished: 1,
+          instructor_id: 1,
           videos: {
             $map: {
               input: "$videos",
               as: "v",
               in: {
-                id: "$$v._id",
+                _id: "$$v._id",
                 title: "$$v.title",
-                duration: { $toString: "$$v.duration" },
+                duration: "$$v.duration",
                 freePreview: "$$v.freePreview",
+                s3Key: "$$v.s3Key",
               },
             },
           },
         },
       },
     ]);
+
     if (!course) {
       throw new ApiError({
         message: "Unable to get the Required Course from db",
         statusCode: 500,
       });
     }
+
+    if (course.instructor_id?.toString() !== _id.toString()) {
+      throw new ApiError({
+        message: "Unauthorized: You are not the creator of this course",
+        statusCode: 403,
+      });
+    }
+
     return res.status(200).json(
       new ApiResponse({
         message: "Successfully got the requested Course",
@@ -508,12 +461,27 @@ export const getAllPurchsedCourses = asyncHandler(async (req, res, next) => {
           as: "videos",
         },
       },
+      // Lookup instructor details
+      {
+        $lookup: {
+          from: "users",
+          localField: "course.instructor_id",
+          foreignField: "_id",
+          as: "instructorDetails",
+        },
+      },
+      {
+        $unwind: {
+          path: "$instructorDetails",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
       // Project the desired output format
       {
         $project: {
           _id: 1,
           title: "$course.title",
-          instructor: "$course.instructor",
+          instructor: "$instructorDetails.username",
           status: {
             $cond: {
               if: { $eq: ["$access_status", "active"] },
@@ -603,3 +571,149 @@ export const getAllPurchsedCourses = asyncHandler(async (req, res, next) => {
     );
   }
 });
+
+export const getStudentViewCourseDetails = asyncHandler(
+  async (req, res, next) => {
+    try {
+      const { courseId } = req.params;
+
+      const { _id } = req.info;
+
+      if (!courseId) {
+        throw new ApiError({
+          message: "Course Id is Required",
+          statusCode: 400,
+        });
+      }
+      const [course] = await Course.aggregate([
+        {
+          $match: { _id: new mongoose.Types.ObjectId(courseId) },
+        },
+        {
+          $lookup: {
+            from: "videos",
+            localField: "videos_id",
+            foreignField: "_id",
+            as: "videos",
+          },
+        },
+        {
+          $lookup: {
+            from: "users",
+            localField: "instructor_id",
+            foreignField: "_id",
+            as: "instructorDetails",
+          },
+        },
+        {
+          $unwind: {
+            path: "$instructorDetails",
+            preserveNullAndEmptyArrays: true,
+          },
+        },
+        {
+          $lookup: {
+            from: "purchases",
+            localField: "_id",
+            foreignField: "course_id",
+            as: "purchases",
+          },
+        },
+        {
+          $addFields: {
+            purchaseForUser: {
+              $filter: {
+                input: "$purchases",
+                as: "p",
+                cond: {
+                  $eq: ["$$p.student_id", new mongoose.Types.ObjectId(_id)],
+                },
+              },
+            },
+          },
+        },
+        {
+          $addFields: {
+            isPurchased: { $gt: [{ $size: "$purchaseForUser" }, 0] },
+            completed_video_ids: {
+              $ifNull: [
+                { $first: "$purchaseForUser.videos_completed_ids" },
+                [],
+              ],
+            },
+            last_watched_video_id: {
+              $first: "$purchaseForUser.last_watched_video_id",
+            },
+          },
+        },
+        {
+          $addFields: {
+            students: { $size: "$purchases" },
+            totalLessons: { $size: "$videos" },
+            completedLessons: {
+              $size: { $ifNull: ["$completed_video_ids", []] },
+            },
+            totalDurationMinutes: { $sum: "$videos.duration" },
+          },
+        },
+        {
+          $project: {
+            _id: 0,
+            id: "$_id",
+            title: 1,
+            instructor: "$instructorDetails.username",
+            description: 1,
+            image: "$thumbnail",
+            level: 1,
+            price: "$pricing",
+            students: 1,
+            totalLessons: 1,
+            completedLessons: 1,
+            completed_video_ids: 1,
+            last_watched_video_id: 1,
+            isPurchased: 1,
+            duration: {
+              $concat: [
+                { $toString: { $ifNull: ["$totalDurationMinutes", 0] } },
+                "m",
+              ],
+            },
+            videos: {
+              $map: {
+                input: "$videos",
+                as: "v",
+                in: {
+                  id: "$$v._id",
+                  title: "$$v.title",
+                  duration: { $toString: "$$v.duration" },
+                  freePreview: "$$v.freePreview",
+                  s3Key: "$$v.s3Key",
+                },
+              },
+            },
+          },
+        },
+      ]);
+      if (!course) {
+        throw new ApiError({
+          message: "Unable to get the Required Course from db",
+          statusCode: 500,
+        });
+      }
+      return res.status(200).json(
+        new ApiResponse({
+          message: "Successfully got the requested Course",
+          statusCode: 200,
+          data: course,
+        })
+      );
+    } catch (error) {
+      return res.status(error.statusCode || error.http_code || 500).json(
+        new ApiResponse({
+          message: error.message,
+          statusCode: error.statusCode || error.http_code || 500,
+        })
+      );
+    }
+  }
+);

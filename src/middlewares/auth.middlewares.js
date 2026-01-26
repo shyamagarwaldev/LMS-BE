@@ -7,6 +7,7 @@ export default function Auth(req, res, next) {
     const token =
       req.cookies.accessToken ||
       req.headers?.authorization?.replace("Bearer ", "");
+
     if (!token)
       throw new ApiError({ statusCode: 403, message: "Access Token Required" });
     let verifiedToken;
@@ -22,7 +23,7 @@ export default function Auth(req, res, next) {
       new ApiResponse({
         statusCode: error.statusCode || error.http_code || 500,
         message: error.message,
-      })
+      }),
     );
   }
 }

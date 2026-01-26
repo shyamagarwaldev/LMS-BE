@@ -6,16 +6,10 @@ import ApiError from "../utils/ApiError.js";
 import ApiResponse from "../utils/ApiResponse.js";
 import asyncHandler from "../utils/asyncHandler.js";
 import {
-  deleteImageFromCloudinary,
-  uploadImageOnCloudinary,
-} from "../utils/cloudinary.js";
-import {
   generateAccessToken,
   generateRefreshToken,
 } from "../utils/generateToken.js";
-import fs from "fs";
 import mongoose from "mongoose";
-import Course from "../models/course.models.js";
 
 export const signup = asyncHandler(async (req, res) => {
   try {
@@ -47,7 +41,7 @@ export const signup = asyncHandler(async (req, res) => {
       new ApiResponse({
         statusCode: 201,
         message: "User SignUp Successfully",
-      })
+      }),
     );
   } catch (error) {
     return res.status(error.statusCode || error.http_code || 500).json(
@@ -55,7 +49,7 @@ export const signup = asyncHandler(async (req, res) => {
         message: error.message,
         statusCode: error.statusCode || error.http_code || 500,
         path: error.path,
-      })
+      }),
     );
   }
 });
@@ -96,7 +90,7 @@ export const signin = asyncHandler(async (req, res) => {
           data: {
             user: existUser,
           },
-        })
+        }),
       );
   } catch (error) {
     return res.status(error.statusCode || error.http_code || 500).json(
@@ -104,7 +98,7 @@ export const signin = asyncHandler(async (req, res) => {
         message: error.message,
         path: error.path,
         statusCode: error.statusCode || error.http_code || 500,
-      })
+      }),
     );
   }
 });
@@ -115,7 +109,7 @@ export const getUser = asyncHandler(async (req, res) => {
     if (!_id)
       throw new ApiError({ statusCode: 403, message: "user info missing" });
     const existUser = await User.findById(_id).select(
-      "-createdAt -password -refreshToken -updatedAt -__v"
+      "-createdAt -password -refreshToken -updatedAt -__v",
     );
     if (!existUser)
       throw new ApiError({
@@ -127,7 +121,7 @@ export const getUser = asyncHandler(async (req, res) => {
         statusCode: 200,
         message: "Successfuly got User",
         data: existUser,
-      })
+      }),
     );
   } catch (error) {
     return res.status(error.statusCode || error.http_code || 500).json(
@@ -135,7 +129,7 @@ export const getUser = asyncHandler(async (req, res) => {
         message: error.message,
         path: error.path,
         statusCode: error.statusCode || error.http_code || 500,
-      })
+      }),
     );
   }
 });
@@ -154,7 +148,7 @@ export const refreshAccessToken = asyncHandler(async (req, res) => {
     try {
       verifiedToken = jwt.verify(
         incomingRefreshToken,
-        process.env.JWT_REFRESH_SECRET
+        process.env.JWT_REFRESH_SECRET,
       );
     } catch (error) {
       throw new ApiError({ statusCode: 401, message: "Invalid Refresh Token" });
@@ -169,7 +163,7 @@ export const refreshAccessToken = asyncHandler(async (req, res) => {
     ) {
       throw new ApiError({
         statusCode: 401,
-        message: "Invalid Refresh Token or User Logged Out",
+        message: "Invalid Refresh Token",
       });
     }
 
@@ -185,117 +179,14 @@ export const refreshAccessToken = asyncHandler(async (req, res) => {
         new ApiResponse({
           statusCode: 200,
           message: "Access Token is Successfully Refreshed",
-        })
+        }),
       );
   } catch (error) {
     res.status(error.statusCode || error.http_code || 500).json(
       new ApiResponse({
         message: error.message,
         statusCode: error.statusCode || error.http_code || 500,
-      })
-    );
-  }
-});
-
-export const editProfileImage = asyncHandler(async (req, res) => {
-  try {
-    const { _id, role } = req.info;
-    if (!(_id || role))
-      throw new ApiError({ statusCode: 403, message: "user info missing" });
-
-    const path = req.file?.path;
-    if (!path)
-      throw new ApiError({ message: "Invalid File Type", statusCode: 400 });
-
-    const user = await User.findById(_id);
-    if (user.profileImage_id) {
-      const response = await deleteImageFromCloudinary(user.profileImage_id);
-      if (!response) {
-        fs.unlinkSync(path);
-        throw new ApiError({
-          message: "Unable to Upload The Profile Image",
-          statusCode: 500,
-        });
-      }
-    }
-    const generated_public_id = _id + "/" + Date.now();
-    const { public_id, url } = await uploadImageOnCloudinary(
-      path,
-      `${role}/ProfileImage`,
-      generated_public_id
-    );
-    if (!public_id && !url)
-      throw new ApiError({
-        message: "Unable To Upload the Profile Image",
-        statusCode: 500,
-      });
-    user.profileImage_id = public_id;
-    user.profileImage = url;
-    user.save({ validateBeforeSave: false });
-    return res.status(200).json(
-      new ApiResponse({
-        statusCode: 200,
-        message: "Profile image updated successfully",
-      })
-    );
-  } catch (error) {
-    return res.status(error.statusCode || error.http_code || 500).json(
-      new ApiResponse({
-        message: error.message,
-        statusCode: error.statusCode || error.http_code || 500,
-      })
-    );
-  }
-});
-
-export const editCoverImage = asyncHandler(async (req, res) => {
-  try {
-    const { _id, role } = req.info;
-    if (!(_id || role))
-      throw new ApiError({ statusCode: 403, message: "user info missing" });
-
-    const path = req.file?.path;
-    if (!path)
-      throw new ApiError({ message: "Invalid File Type", statusCode: 400 });
-
-    const user = await User.findById(_id);
-    if (user.coverImage_id) {
-      const response = await deleteImageFromCloudinary(user.coverImage_id);
-      if (!response) {
-        fs.unlinkSync(path);
-        throw new ApiError({
-          message: "Unable to Upload The Cover Image",
-          statusCode: 500,
-        });
-      }
-    }
-    const generated_public_id = _id + "/" + Date.now();
-    const { public_id, url } = await uploadImageOnCloudinary(
-      path,
-      `${role}/CoverImage`,
-      generated_public_id
-    );
-    if (!public_id && !url)
-      throw new ApiError({
-        message: "Unable To Upload the Cover Image",
-        statusCode: 500,
-      });
-    user.coverImage_id = public_id;
-    user.coverImage = url;
-    user.save({ validateBeforeSave: false });
-
-    return res.status(200).json(
-      new ApiResponse({
-        statusCode: 200,
-        message: "Cover image updated successfully",
-      })
-    );
-  } catch (error) {
-    return res.status(error.statusCode || error.http_code || 500).json(
-      new ApiResponse({
-        message: error.message,
-        statusCode: error.statusCode || error.http_code || 500,
-      })
+      }),
     );
   }
 });
@@ -320,66 +211,19 @@ export const logout = asyncHandler(async (req, res) => {
         new ApiResponse({
           message: "Logged out succesfully",
           statusCode: 200,
-        })
+        }),
       );
   } catch (error) {
     return res.status(error.statusCode || error.http_code || 500).json(
       new ApiResponse({
         message: error.message,
         statusCode: error.statusCode || error.http_code || 500,
-      })
+      }),
     );
   }
 });
 
-export const getStudentAllCourses = asyncHandler(async (req, res) => {
-  try {
-    const { _id } = req.info;
-    let courses;
-    try {
-      [{ courses }] = await User.aggregate([
-        {
-          $match: {
-            _id: new mongoose.Types.ObjectId(_id),
-          },
-        },
-        {
-          $lookup: {
-            from: "courses",
-            localField: "courses",
-            foreignField: "_id",
-            as: "courses",
-          },
-        },
-        {
-          $project: {
-            courses: 1,
-          },
-        },
-      ]);
-    } catch (error) {
-      throw new ApiError({
-        message: "Unable to get Student Courses from DB",
-        statusCode: 500,
-      });
-    }
-    return res.status(200).json(
-      new ApiResponse({
-        message: "Successfully got The Student All Courses",
-        statusCode: 200,
-        data: courses,
-      })
-    );
-  } catch (error) {
-    return res.status(error.statusCode || error.http_code || 500).json(
-      new ApiResponse({
-        message: error.message,
-        statusCode: error.statusCode || error.http_code || 500,
-      })
-    );
-  }
-});
-export const getAdminCourses = asyncHandler(async (req, res) => {
+export const getAllAdminCourses = asyncHandler(async (req, res) => {
   try {
     const { _id } = req.info;
     if (!_id)
@@ -399,10 +243,10 @@ export const getAdminCourses = asyncHandler(async (req, res) => {
           pipeline: [
             {
               $lookup: {
-                from: "users",
+                from: "purchases",
                 localField: "_id",
-                foreignField: "courses",
-                as: "students",
+                foreignField: "course_id",
+                as: "purchases",
               },
             },
             {
@@ -411,12 +255,10 @@ export const getAdminCourses = asyncHandler(async (req, res) => {
                 pricing: 1,
                 isPublished: 1,
                 title: 1,
-                students: {
-                  $max: [{ $subtract: [{ $size: "$students" }, 1] }, 0],
-                },
+                students: { $size: "$purchases" },
                 revenue: {
                   $multiply: [
-                    { $max: [{ $subtract: [{ $size: "$students" }, 1] }, 0] }, // Adjusted student count
+                    { $size: "$purchases" }, // Adjusted student count
                     "$pricing",
                   ],
                 },
@@ -443,14 +285,14 @@ export const getAdminCourses = asyncHandler(async (req, res) => {
         message: "Successfully got the requested Courses",
         statusCode: 200,
         data: courses[0]?.courses,
-      })
+      }),
     );
   } catch (error) {
     return res.status(error.statusCode || error.http_code || 500).json(
       new ApiResponse({
         message: error.message,
         statusCode: error.statusCode || error.http_code || 500,
-      })
+      }),
     );
   }
 });

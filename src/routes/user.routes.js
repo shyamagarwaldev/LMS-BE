@@ -2,10 +2,7 @@ import { Router } from "express";
 import upload from "../middlewares/multer.middlewares.js";
 import Auth from "../middlewares/auth.middlewares.js";
 import {
-  editCoverImage,
-  editProfileImage,
-  getAdminCourses,
-  getStudentAllCourses,
+  getAllAdminCourses,
   getUser,
   logout,
   refreshAccessToken,
@@ -21,15 +18,8 @@ userRouter.route("/refreshAccessToken").get(refreshAccessToken);
 userRouter.use(Auth);
 
 userRouter.route("/getUser").get(getUser);
-userRouter
-  .route("/profileImage")
-  .put(upload.single("profileImage"), editProfileImage);
-
-userRouter
-  .route("/coverImage")
-  .put(upload.single("coverImage"), editCoverImage);
 
 userRouter.route("/logout").post(logout);
-userRouter.route("/studentAllCourses").get(getStudentAllCourses);
-userRouter.route("/getAdminCourses").get(getAdminCourses);
+// userRouter.route("/studentAllCourses").get(getAllStudentCourses);
+userRouter.route("/getAllAdminCourses").get(getAllAdminCourses);
 export default userRouter;

@@ -59,8 +59,9 @@ const courseSchema = new Schema(
       type: Boolean,
       default: false,
     },
-    instructor: {
-      type: String,
+    instructor_id: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
       required: true,
     },
   },

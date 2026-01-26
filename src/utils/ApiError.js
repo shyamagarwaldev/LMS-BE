@@ -10,7 +10,7 @@ export default class ApiError extends Error {
     this.name = "ApiError";
     this.message = message;
     this.statusCode = statusCode;
-    this.success = statusCode < 400;
+    this.success = false;
     this.errors = errors;
     if (stack) {
       this.stack = stack;

@@ -6,6 +6,10 @@ import {
   generateGetURL,
   generateUploadURL,
 } from "../utils/s3.js";
+import Purchase from "../models/purchase.models.js";
+import Course from "../models/course.models.js";
+import Video from "../models/video.models.js";
+import mongoose from "mongoose";
 const folderType = {
   videos: 1,
   thumbnails: 1,
@@ -31,6 +35,8 @@ export const generatePUTPreSignedURL = asyncHandler(async (req, res) => {
         statusCode: 400,
       });
     }
+    //file -->image/jpeg
+    //filetype--> jpeg
     const fileType = file.split("/")[1];
     if (!fileType) {
       throw new ApiError({
@@ -54,7 +60,7 @@ export const generatePUTPreSignedURL = asyncHandler(async (req, res) => {
     const { uploadURL, Key: key } = await generateUploadURL(
       fileType,
       folder,
-      _id
+      _id,
     );
     return res.status(200).json(
       new ApiResponse({
@@ -64,7 +70,7 @@ export const generatePUTPreSignedURL = asyncHandler(async (req, res) => {
           uploadURL,
           key,
         },
-      })
+      }),
     );
   } catch (error) {
     return res
@@ -72,7 +78,7 @@ export const generatePUTPreSignedURL = asyncHandler(async (req, res) => {
         new ApiResponse({
           message: error.message,
           statusCode: error.statusCode || error.http_code || 500,
-        })
+        }),
       )
       .status(error.statusCode || error.http_code || 500);
   }
@@ -109,7 +115,7 @@ export const generateGETVideoPreSignedURL = asyncHandler(async (req, res) => {
           getURL,
           key,
         },
-      })
+      }),
     );
   } catch (error) {
     return res
@@ -117,7 +123,7 @@ export const generateGETVideoPreSignedURL = asyncHandler(async (req, res) => {
         new ApiResponse({
           message: error.message,
           statusCode: error.statusCode || error.http_code || 500,
-        })
+        }),
       )
       .status(error.statusCode || error.http_code || 500);
   }
@@ -145,7 +151,7 @@ export const generateMultiGETVideoPreSignedURL = asyncHandler(
         videos.map(async (video) => {
           const getURL = await generateGetURL(video.s3Key);
           return { getURL, _id: video._id };
-        })
+        }),
       );
 
       let url = {};
@@ -161,7 +167,7 @@ export const generateMultiGETVideoPreSignedURL = asyncHandler(
           message: "successfully got all the pre-signed urls.",
           statusCode: 200,
           data: url,
-        })
+        }),
       );
     } catch (error) {
       return res
@@ -169,11 +175,11 @@ export const generateMultiGETVideoPreSignedURL = asyncHandler(
           new ApiResponse({
             message: error.message,
             statusCode: error.statusCode || error.http_code || 500,
-          })
+          }),
         )
         .status(error.statusCode || error.http_code || 500);
     }
-  }
+  },
 );
 
 export const deleteS3Items = asyncHandler(async (req, res) => {
@@ -231,7 +237,7 @@ export const deleteS3Items = asyncHandler(async (req, res) => {
         new ApiResponse({
           message: `Successfully Deleted S3 Object from ${folderName}`,
           statusCode: 204,
-        })
+        }),
       )
       .status(204);
   } catch (error) {
@@ -239,11 +245,61 @@ export const deleteS3Items = asyncHandler(async (req, res) => {
       new ApiResponse({
         message: error.message,
         statusCode: error.statusCode || error.http_code || 500,
-      })
+      }),
     );
   }
 });
 
+export const getFreePreviewVideoURLs = asyncHandler(async (req, res) => {
+  try {
+    const { courseId, videoId } = req.params;
+
+    if (!courseId) {
+      throw new ApiError({
+        message: "Course ID is required",
+        statusCode: 400,
+      });
+    }
+
+    if (!videoId) {
+      throw new ApiError({
+        message: "Video ID is required",
+        statusCode: 400,
+      });
+    }
+
+    // Get video with freePreview flag
+    const video = await Video.findOne({
+      _id: new mongoose.Types.ObjectId(videoId),
+      freePreview: true,
+    }).select("_id s3Key");
+
+    if (!video) {
+      throw new ApiError({
+        message: "Free preview video not found",
+        statusCode: 404,
+      });
+    }
+
+    // Generate pre-signed URL
+    const getURL = await generateGetURL(video.s3Key);
+
+    return res.status(200).json(
+      new ApiResponse({
+        message: "Successfully generated free preview video URL",
+        statusCode: 200,
+        data: { url: getURL },
+      }),
+    );
+  } catch (error) {
+    return res.status(error.statusCode || error.http_code || 500).json(
+      new ApiResponse({
+        message: error.message,
+        statusCode: error.statusCode || error.http_code || 500,
+      }),
+    );
+  }
+});
 export const getPublicURL = asyncHandler(async (req, res) => {
   try {
     const { key } = req.query;
@@ -282,14 +338,105 @@ export const getPublicURL = asyncHandler(async (req, res) => {
           publicURL,
           key,
         },
-      })
+      }),
     );
   } catch (error) {
     return res.status(error.statusCode || 500).json(
       new ApiResponse({
         message: error.message || "Internal server error",
         statusCode: error.statusCode || 500,
-      })
+      }),
+    );
+  }
+});
+
+export const getStudentVideoURLs = asyncHandler(async (req, res) => {
+  try {
+    const { courseId, videoId } = req.params;
+    const { _id } = req.info;
+
+    if (!courseId) {
+      throw new ApiError({
+        message: "Course ID is required",
+        statusCode: 400,
+      });
+    }
+
+    if (!videoId) {
+      throw new ApiError({
+        message: "Video ID is required",
+        statusCode: 400,
+      });
+    }
+
+    // Verify the student has purchased the course
+    const purchase = await Purchase.findOne({
+      student_id: new mongoose.Types.ObjectId(_id),
+      course_id: new mongoose.Types.ObjectId(courseId),
+    });
+
+    if (!purchase) {
+      throw new ApiError({
+        message: "You must purchase the course to access videos",
+        statusCode: 403,
+      });
+    }
+
+    // Get the course to verify video belongs to it
+    const course = await Course.findById(courseId);
+    if (!course) {
+      throw new ApiError({
+        message: "Course not found",
+        statusCode: 404,
+      });
+    }
+
+    // Verify video belongs to this course
+    const videoObjectId = new mongoose.Types.ObjectId(videoId);
+    const isVideoInCourse = course.videos_id.some(
+      (courseVideoId) => courseVideoId.toString() === videoObjectId.toString(),
+    );
+
+    if (!isVideoInCourse) {
+      throw new ApiError({
+        message: "Video not found in this course",
+        statusCode: 404,
+      });
+    }
+
+    // Get video
+    const video = await Video.findById(videoObjectId).select("_id s3Key");
+
+    if (!video) {
+      throw new ApiError({
+        message: "Video not found",
+        statusCode: 404,
+      });
+    }
+
+    if (!video.s3Key) {
+      throw new ApiError({
+        message: "Video does not have an s3Key",
+        statusCode: 500,
+      });
+    }
+
+    // Generate pre-signed URL
+    const getURL = await generateGetURL(video.s3Key);
+
+    return res.status(200).json(
+      new ApiResponse({
+        message: "Successfully generated video URL",
+        statusCode: 200,
+        data: { url: getURL },
+      }),
+    );
+  } catch (error) {
+    return res.status(error.statusCode || error.http_code || 500).json(
+      new ApiResponse({
+        message: error.message,
+        statusCode: error.statusCode || error.http_code || 500,
+      }),
     );
   }
 });
