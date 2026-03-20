@@ -19,7 +19,8 @@ jobs:
 
       - name: deploy to server
         run: |
-          ssh -i ~/.ssh/id_rsa ubuntu@${{secrets.EC2_DEV_IP}}
-          cd LMS-BE/ && git pull
-          npm install
-          pm2 restart api-dev-server
+          ssh -i ~/.ssh/id_rsa ubuntu@${{secrets.EC2_DEV_IP}} << 'EOF'
+            cd LMS-BE && git pull
+            npm install
+            pm2 restart api-dev-server
+          EOF
