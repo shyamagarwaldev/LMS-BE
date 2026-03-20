@@ -15,7 +15,7 @@ jobs:
           mkdir -p ~/.ssh
           echo "${{secrets.EC2_SSH_KEY}}" &> ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          echo "${{secrets.EC2_KNOWN_HOST}}" &> ~/.ssh/known_hosts
+          echo "${{secrets.EC2_KNOWN_HOSTS}}" &> ~/.ssh/known_hosts
 
       - name: deploy to server
         run: |
