@@ -1,3 +1,3 @@
-const DB_NAME = "CourseApp";
+const DB_NAME = process.env.DB_NAME;
 
 export { DB_NAME };
