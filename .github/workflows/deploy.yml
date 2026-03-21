@@ -21,9 +21,16 @@ jobs:
         run: |
           ssh -i ~/.ssh/id_rsa ubuntu@${{secrets.EC2_DEV_IP}} << EOF
             cd LMS-BE
-            git pull origin main --rebase
-            export NVM_DIR=~/.nvm
-            source ~/.nvm/nvm.sh
-            npm install
-            pm2 reload api-dev-server
+            git fetch origin
+            git reset --hard origin/main
+            docker build -t api-dev-backend .
+            docker stop api-dev-server || true
+            docker rm api-dev-server || true
+
+            docker run -d \
+              -p 8080:8080 \
+              --env-file .env \
+              --name api-dev-serer \
+              --restart always \
+              api-dev-backend
           EOF
