@@ -22,7 +22,8 @@ jobs:
           ssh -i ~/.ssh/id_rsa ubuntu@${{secrets.EC2_DEV_IP}} << EOF
             cd LMS-BE
             git pull origin main --rebase
-            source ~/.bashrc
-            npm install 
+            export NVM_DIR=~/.nvm
+            source ~/.nvm/nvm.sh
+            npm install
             pm2 reload api-dev-server
           EOF
