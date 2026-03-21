@@ -21,7 +21,8 @@ jobs:
         run: |
           ssh -i ~/.ssh/id_rsa ubuntu@${{secrets.EC2_DEV_IP}} << EOF
             cd LMS-BE
-            git pull
+            git pull origin main --rebase
+            source ~/.bashrc
             npm install 
             pm2 reload api-dev-server
           EOF
