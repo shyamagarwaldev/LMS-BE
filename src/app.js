@@ -16,6 +16,13 @@ app.use(cookieParser());
 app.use(express.urlencoded({ limit: "16kb", extended: true }));
 app.use("/static", express.static("public"));
 
+app.get("/", (req, res) => {
+  return res.json({
+    message: "api-derv-server is up and running",
+    status: 200,
+  });
+});
+
 import userRouter from "./routes/user.routes.js";
 import courseRouter from "./routes/course.routes.js";
 import videoRouter from "./routes/video.routes.js";
